@@ -1,4 +1,4 @@
-figma.showUI(__html__, { width: 320, height: 300 })
+figma.showUI(__html__, { width: 320, height: 350 })
 
 figma.ui.onmessage = (msg) => {
   const { type, selected } = msg
@@ -15,10 +15,16 @@ let SPEAKER_CONTENT_SIZE = 400;
 
 async function generateBackdrop(agenda){
 
+  if(figma.currentPage.selection.length <= 0){
+    alert('Please select a frame');
+    return;
+  }
+
   var frame = figma.currentPage.selection[0];
 
-  if(typeof frame.children === 'undefined'){
-    alert('Please select a frame')
+  if(typeof frame?.children === 'undefined'){
+    alert('Please select a frame');
+    return;
   }
 
   // console.log(frame);
@@ -47,7 +53,7 @@ async function generateBackdrop(agenda){
 
   agenda_group.fills = [];
 
-  console.log(agenda_group.fills);
+  // console.log(agenda_group.fills);
   
   frame.appendChild(agenda_group);
 

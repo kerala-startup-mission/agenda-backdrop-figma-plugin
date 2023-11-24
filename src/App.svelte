@@ -20,7 +20,7 @@
     time = "";
     item = "";
 
-    console.log(agenda_list);
+    // console.log(agenda_list);
   }
 
   function generate(){
@@ -149,10 +149,6 @@
     text-align: center;
     height: 100%;
   }
-  .footer {
-    border-top: 1px solid var(--silver);
-  }
-
   select {
     appearance: none;
     /* safari */
