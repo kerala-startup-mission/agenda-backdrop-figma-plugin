@@ -1,0 +1,17 @@
+{
+  "name": "Backdrop Generator",
+  "id": "1309494260865214188",
+  "api": "1.0.0",
+  "main": "dist/code.js",
+  "ui": "dist/ui.html",
+  "capabilities": [],
+  "enableProposedApi": false,
+  "editorType": [
+    "figma"
+  ],
+  "networkAccess": {
+    "allowedDomains": [
+      "https://events.startupmission.in"
+    ]
+  }
+}
