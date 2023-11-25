@@ -1,17 +1,104 @@
-figma.showUI(__html__, { width: 320, height: 350 })
+figma.showUI(__html__, { width: 320, height: 400 })
 
 figma.ui.onmessage = (msg) => {
-  const { type, selected } = msg
+  const { type, data } = msg
 
   if (type === `GENERATE`) {
-    generateBackdrop(selected);
+    generateBackdrop(data);
+  }
+
+  if (type === `SETTINGS`) {
+    saveSettings(data);
+  }
+
+  if (type === `EVENT`) {
+    saveEvent(data);
+  }
+
+  if (type === `DEFAULT`){
+
+    settings = default_settings;
+
+    figma.ui.postMessage({
+      type: "settings",
+      data: default_settings
+    });
+
   }
 
 }
 
-let HEADING_SIZE = 100;
-let SPEAKER_IMAGE_SIZE = 250;
-let SPEAKER_CONTENT_SIZE = 400;
+let settings = {};
+
+let default_settings = {
+  HEADING_SIZE : 100,
+  SPEAKER_IMAGE_SIZE : 250,
+  SPEAKER_CONTENT_SIZE : 400,
+  SPEAKER_STROKE_COLOR : "#C70000",
+  SPEAKER_IMAGE_TYPE : 'BR',
+  SPEAKER_STROKE_WIDTH : 5,
+}
+
+// let HEADING_SIZE = 100;
+// let SPEAKER_IMAGE_SIZE = 250;
+// let SPEAKER_CONTENT_SIZE = 400;
+// let SPEAKER_STROKE_COLOR = "#C70000";
+// let SPEAKER_IMAGE_TYPE = 'BR';
+// let SPEAKER_STROKE_WIDTH = 5;
+
+init();
+
+async function init(){
+  await loadSettings();
+
+  let event = await loadEvent();
+
+  figma.ui.postMessage({
+    type: "settings",
+    data: settings
+  });
+
+  figma.ui.postMessage({
+    type: "event",
+    data: event
+  });
+
+}
+
+async function loadEvent(){
+
+  let saved_event = await figma.clientStorage.getAsync('event');
+
+  if(saved_event){
+    return saved_event;
+  }
+  else{
+    return "huddle-global-2023";
+  }
+
+}
+
+async function saveEvent(data){
+  figma.clientStorage.setAsync('event', data);
+}
+
+async function loadSettings(){
+
+  let saved_settings = await figma.clientStorage.getAsync('settings');
+
+  if(saved_settings){
+    settings = JSON.parse(saved_settings);
+  }
+  else{
+    settings = default_settings;
+  }
+
+}
+
+async function saveSettings(data){
+  figma.clientStorage.setAsync('settings', JSON.stringify(data));
+  settings = data;
+}
 
 async function generateBackdrop(agenda){
 
@@ -94,7 +181,7 @@ async function generateSpeaker(frame, speaker){
 
   const speaker_image = await generateSpeakerImage(frame, speaker);
 
-  const speaker_name = generateText(speaker.name, 'Poppins', 'Bold', 30);
+  const speaker_name = generateText(speaker.name, 'Poppins', 'Bold', 40);
   const speaker_designation = generateText(speaker.designation, 'Poppins', 'Regular', 25);
   const speaker_organisation = generateText(speaker.organisation, 'Poppins', 'Regular', 25);
 
@@ -108,7 +195,7 @@ function generateSpeakerGroup(items){
 
   const speaker_group = figma.createFrame();
 
-  speaker_group.resize(SPEAKER_CONTENT_SIZE, SPEAKER_CONTENT_SIZE);
+  speaker_group.resize(settings.SPEAKER_CONTENT_SIZE, settings.SPEAKER_CONTENT_SIZE);
 
   items.forEach(item => {
     speaker_group.appendChild(item);    
@@ -132,7 +219,7 @@ function generateText(text, fontname, weight, size){
   textNode.textAlignHorizontal = 'CENTER';
   textNode.textAlignVertical = 'CENTER';
   textNode.textAutoResize = 'WIDTH_AND_HEIGHT';
-  textNode.resize(SPEAKER_CONTENT_SIZE, textNode.height);
+  textNode.resize(settings.SPEAKER_CONTENT_SIZE, textNode.height);
 
   return textNode;
 
@@ -142,9 +229,11 @@ async function generateSpeakerImage(frame, speaker){
 
   const image = await figma.createImageAsync(speaker.photo);
 
-  const speaker_image = figma.createEllipse();
+  const speaker_image = figma.createRectangle();
 
-  speaker_image.resize(SPEAKER_IMAGE_SIZE, SPEAKER_IMAGE_SIZE);
+  speakerImageDecoration(speaker_image);
+
+  speaker_image.resize(settings.SPEAKER_IMAGE_SIZE, settings.SPEAKER_IMAGE_SIZE);
 
   speaker_image.fills = [
     {
@@ -155,6 +244,36 @@ async function generateSpeakerImage(frame, speaker){
   ];
 
   return speaker_image;
+
+}
+
+function speakerImageDecoration(speaker_image){
+
+  if(settings.SPEAKER_IMAGE_TYPE == "C"){
+    speaker_image.cornerRadius = settings.SPEAKER_IMAGE_SIZE/2;
+  }
+  else if(settings.SPEAKER_IMAGE_TYPE == "CBR"){
+    speaker_image.cornerRadius = settings.SPEAKER_IMAGE_SIZE/2;
+    speaker_image.bottomRightRadius = 0;
+  }
+  else if(settings.SPEAKER_IMAGE_TYPE == "CBL"){
+    speaker_image.cornerRadius = settings.SPEAKER_IMAGE_SIZE/2;
+    speaker_image.bottomLeftRadius = 0;
+  }
+  else if(settings.SPEAKER_IMAGE_TYPE == "BR"){
+    speaker_image.cornerRadius = settings.SPEAKER_IMAGE_SIZE * 0.2;
+    speaker_image.bottomRightRadius = 0;
+  }
+  else if(settings.SPEAKER_IMAGE_TYPE == "BL"){
+    speaker_image.cornerRadius = settings.SPEAKER_IMAGE_SIZE * 0.2;
+    speaker_image.bottomLeftRadius = 0;
+  }
+
+  speaker_image.strokes = [
+    figma.util.solidPaint(settings.SPEAKER_STROKE_COLOR)
+  ]
+
+  speaker_image.strokeWeight = settings.SPEAKER_STROKE_WIDTH;
 
 }
 
@@ -169,7 +288,7 @@ async function generateHeading(frame, agenda){
   
   const heading = figma.createText();
   heading.characters = agenda.name;
-  heading.fontSize = HEADING_SIZE;
+  heading.fontSize = settings.HEADING_SIZE;
   heading.textAlignHorizontal = 'CENTER';
   
   let heading_width = heading.width;
@@ -178,7 +297,7 @@ async function generateHeading(frame, agenda){
   heading.fontName = { family: "Poppins", style: 'Bold'};
 
   if(heading_width > canvas_width){
-    heading.fontSize = HEADING_SIZE * 0.75;
+    heading.fontSize = settings.HEADING_SIZE * 0.75;
     heading.resize( canvas_width * 0.8, heading.height );
     heading_width = heading.width;
     heading_height = heading.height;
@@ -186,7 +305,7 @@ async function generateHeading(frame, agenda){
     // console.log(heading_height);
 
     if(heading_height > 250){
-      heading.fontSize = HEADING_SIZE * 0.5;
+      heading.fontSize = settings.HEADING_SIZE * 0.5;
       heading.resize( canvas_width * 0.8, heading.height );
 
       heading_width = heading.width;
