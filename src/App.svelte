@@ -98,12 +98,12 @@
       <div class="flex flex-row gap-5 mb-3">
 
         <div class="flex-1">
-          <div class="mb-1">Image Size</div>
+          <div class="mb-1">Image Width</div>
           <input bind:value={settings.SPEAKER_IMAGE_SIZE} type="number" />
         </div>
 
         <div class="flex-1">
-          <div class="mb-1">Content Size</div>
+          <div class="mb-1">Content Width</div>
           <input bind:value={settings.SPEAKER_CONTENT_SIZE} type="number" />
         </div>
 
@@ -119,6 +119,20 @@
         <div class="flex-1">
           <div class="mb-1">Stroke Width</div>
           <input bind:value={settings.SPEAKER_STROKE_WIDTH} type="number" />
+        </div>
+
+      </div>
+
+      <div class="flex flex-row gap-5 mb-3">
+
+        <div class="flex-1">
+          <div class="mb-1">Name Size</div>
+          <input bind:value={settings.NAME_FONT_SIZE} type="number" />
+        </div>
+
+        <div class="flex-1">
+          <div class="mb-1">Content Size</div>
+          <input bind:value={settings.CONTENT_FONT_SIZE} type="number" />
         </div>
 
       </div>

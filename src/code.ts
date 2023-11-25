@@ -37,6 +37,8 @@ let default_settings = {
   SPEAKER_STROKE_COLOR : "#C70000",
   SPEAKER_IMAGE_TYPE : 'BR',
   SPEAKER_STROKE_WIDTH : 5,
+  NAME_FONT_SIZE: 30,
+  CONTENT_FONT_SIZE: 25,
 }
 
 // let HEADING_SIZE = 100;
@@ -181,9 +183,9 @@ async function generateSpeaker(frame, speaker){
 
   const speaker_image = await generateSpeakerImage(frame, speaker);
 
-  const speaker_name = generateText(speaker.name, 'Poppins', 'Bold', 40);
-  const speaker_designation = generateText(speaker.designation, 'Poppins', 'Regular', 25);
-  const speaker_organisation = generateText(speaker.organisation, 'Poppins', 'Regular', 25);
+  const speaker_name = generateText(speaker.name, 'Poppins', 'Bold', settings.NAME_FONT_SIZE);
+  const speaker_designation = generateText(speaker.designation, 'Poppins', 'Regular', settings.CONTENT_FONT_SIZE);
+  const speaker_organisation = generateText(speaker.organisation, 'Poppins', 'Regular', settings.CONTENT_FONT_SIZE);
 
   const speaker_item = generateSpeakerGroup([speaker_image, speaker_name, speaker_designation, speaker_organisation]);
 
