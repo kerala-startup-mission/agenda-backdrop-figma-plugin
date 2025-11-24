@@ -33,6 +33,10 @@
     parent.postMessage({ pluginMessage: { type: 'GENERATE', data: selected } }, '*');  
   }
 
+  function generateMultiple(){
+    parent.postMessage({ pluginMessage: { type: 'GENERATE_MULTIPLE', data: agenda_list[date][time] } }, '*');  
+  }
+
   async function loadEvents(){
     let data = await fetch(`https://events.startupmission.in/api/events`).then(response => response.json());
     event_list = data;
@@ -204,6 +208,12 @@
               <option>{time}</option>
             {/each}
           </select>
+        </div>
+      {/if}
+
+      {#if date && time}
+        <div class="mb-sm">
+          <button on:click={()=>{generateMultiple();}} class="button">Generate All</button>
         </div>
       {/if}
 

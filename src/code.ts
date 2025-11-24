@@ -7,6 +7,10 @@ figma.ui.onmessage = (msg) => {
     generateBackdrop(data);
   }
 
+  if (type === 'GENERATE_MULTIPLE'){
+    generateMultipleBackdrop(data);
+  }
+
   if (type === `SETTINGS`) {
     saveSettings(data);
   }
@@ -100,6 +104,96 @@ async function loadSettings(){
 async function saveSettings(data){
   figma.clientStorage.setAsync('settings', JSON.stringify(data));
   settings = data;
+}
+
+async function generateMultipleBackdrop(agenda_list){
+
+  if(figma.currentPage.selection.length <= 0){
+    alert('Please select a frame');
+    return;
+  }
+
+  var frame = figma.currentPage.selection[0];
+
+  if(typeof frame?.children === 'undefined'){
+    alert('Please select a frame');
+    return;
+  }
+
+  // console.log(frame);
+
+  const { x, y, width, height } = frame;
+
+  const cols = 10;
+  const rows = 10;
+  const spacing = 50;
+
+  const actual_rows = Math.ceil(agenda_list.length / cols);
+
+  var repeater = figma.createFrame();
+
+  repeater.fills = [];
+
+  // Auto Layout grid with wrap
+  repeater.layoutMode = "HORIZONTAL";
+  repeater.layoutWrap = "WRAP";
+  repeater.primaryAxisAlignItems = "CENTER";
+  repeater.counterAxisAlignItems = "CENTER";
+  repeater.itemSpacing = spacing;
+  repeater.counterAxisSpacing = spacing;
+  repeater.paddingLeft = 0;
+  repeater.paddingRight = 0;
+  repeater.paddingTop = 0;
+  repeater.paddingBottom = 0;
+
+  // Fix the container size so wrap respects our exact cols/rows
+  repeater.primaryAxisSizingMode = "FIXED";
+  repeater.counterAxisSizingMode = "FIXED";
+
+  const targetWidth  = width  * cols + spacing * (cols - 1);
+  const targetHeight = height * actual_rows + spacing * (actual_rows - 1);
+  repeater.resize(targetWidth, targetHeight);
+
+  repeater.x = x + width + 10;
+  repeater.y = y + height;
+
+  for(var i = 0; i < agenda_list.length; i++){
+
+    const agenda = agenda_list[i];
+
+    const agenda_group = figma.createFrame();
+
+    agenda_group.fills = [];
+  
+    const heading = await generateHeading(frame, agenda);
+    agenda_group.appendChild(heading);
+
+    if(Object.keys(agenda.speakers).length){
+      const speaker_layout = await generateSpeakers(frame, agenda);    
+      agenda_group.appendChild(speaker_layout);
+    }
+
+    agenda_group.layoutMode = 'VERTICAL';
+    agenda_group.primaryAxisAlignItems = 'CENTER';
+    agenda_group.counterAxisAlignItems = 'CENTER';
+    agenda_group.itemSpacing = 50;
+
+    agenda_group.resize(width, height);
+
+    // console.log(agenda_group.fills);
+
+    const group = frame.clone();
+
+    group.appendChild(agenda_group);
+    
+    repeater.appendChild(group);
+
+  }
+
+  const parent = frame.parent as (PageNode | FrameNode | ComponentNode);
+
+  parent.appendChild(repeater);
+
 }
 
 async function generateBackdrop(agenda){
@@ -238,6 +332,7 @@ async function generateSpeakerImage(frame, speaker){
   speaker_image.resize(settings.SPEAKER_IMAGE_SIZE, settings.SPEAKER_IMAGE_SIZE);
 
   speaker_image.fills = [
+    figma.util.solidPaint('#FFFFFF'),
     {
       type : 'IMAGE',
       imageHash: image.hash,
