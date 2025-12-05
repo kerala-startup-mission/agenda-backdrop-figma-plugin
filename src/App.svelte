@@ -160,6 +160,20 @@
 
       </div>
 
+      <div class="flex flex-row gap-5 mb-3">
+
+        <div class="flex-1">
+          <div class="mb-1">Layout</div>
+          <div class="mb-sm custom-select">
+            <select bind:value={settings.LAYOUT} >
+              <option value="HORIZONTAL">HORIZONTAL</option>
+              <option value="VERTICAL">VERTICAL</option>
+            </select>
+          </div>
+        </div>
+
+      </div>
+
       <div class="mb-sm flex gap-5 justify-center ">
         <button on:click={()=>{saveSettings();}} class="button">Save Settings</button>
         <button on:click={()=>{defaultSettings();}} class="button">Load Default</button>

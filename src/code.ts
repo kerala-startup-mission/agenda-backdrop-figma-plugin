@@ -43,6 +43,7 @@ let default_settings = {
   SPEAKER_STROKE_WIDTH : 5,
   NAME_FONT_SIZE: 30,
   CONTENT_FONT_SIZE: 25,
+  LAYOUT: 'HORIZONTAL'
 }
 
 // let HEADING_SIZE = 100;
@@ -254,11 +255,16 @@ async function generateSpeakers(frame, agenda){
     speaker_layout.appendChild(speaker_item);
   });
 
-  speaker_layout.layoutMode = 'HORIZONTAL';
+  console.log(settings);
+
+  speaker_layout.layoutMode = settings.LAYOUT; //'HORIZONTAL';
+  
   speaker_layout.primaryAxisAlignItems = 'CENTER';
   speaker_layout.counterAxisAlignItems = 'MIN';
 
-  speaker_layout.layoutWrap = 'WRAP';
+  if(settings.LAYOUT == "HORIZONTAL"){
+    speaker_layout.layoutWrap = 'WRAP';
+  }
 
   speaker_layout.itemSpacing = 25;
   speaker_layout.counterAxisSpacing = 25;
@@ -266,6 +272,11 @@ async function generateSpeakers(frame, agenda){
   speaker_layout.resize(frame.width * 0.9 , frame.height * 0.9);
 
   speaker_layout.layoutSizingVertical = 'HUG';
+
+  if(settings.LAYOUT == "VERTICAL"){
+    speaker_layout.layoutSizingHorizontal = "HUG";
+  }
+
   speaker_layout.fills = [];
 
   return speaker_layout;
@@ -281,7 +292,8 @@ async function generateSpeaker(frame, speaker){
   const speaker_designation = generateText(speaker.designation, 'Poppins', 'Regular', settings.CONTENT_FONT_SIZE);
   const speaker_organisation = generateText(speaker.organisation, 'Poppins', 'Regular', settings.CONTENT_FONT_SIZE);
 
-  const speaker_item = generateSpeakerGroup([speaker_image, speaker_name, speaker_designation, speaker_organisation]);
+  const designation_item = generateDesignationGroup([speaker_name, speaker_designation, speaker_organisation]);
+  const speaker_item = generateSpeakerGroup([speaker_image, designation_item]);
 
   return speaker_item;
 
@@ -297,13 +309,45 @@ function generateSpeakerGroup(items){
     speaker_group.appendChild(item);    
   });
 
-  speaker_group.layoutMode = 'VERTICAL';
+  speaker_group.layoutMode = settings.LAYOUT == 'HORIZONTAL' ? 'VERTICAL' : 'HORIZONTAL';
   speaker_group.primaryAxisAlignItems = 'MIN';
   speaker_group.counterAxisAlignItems = 'CENTER';
   speaker_group.fills = [];
+  speaker_group.itemSpacing = settings.LAYOUT == 'HORIZONTAL' ? 0 : 25;
+  speaker_group.layoutSizingVertical = 'HUG';
 
   return speaker_group;
 
+}
+
+function generateDesignationGroup(items){
+  const speaker_group = figma.createFrame();
+
+  speaker_group.resize(settings.SPEAKER_CONTENT_SIZE, settings.SPEAKER_CONTENT_SIZE);
+
+  items.forEach(item => {
+    speaker_group.appendChild(item);    
+  });
+
+  speaker_group.layoutMode = 'VERTICAL';
+
+  if(settings.LAYOUT == "HORIZONTAL"){
+    speaker_group.primaryAxisAlignItems = 'MIN';
+    speaker_group.counterAxisAlignItems = 'CENTER';
+  }
+  else{
+    speaker_group.primaryAxisAlignItems = 'CENTER';
+    speaker_group.counterAxisAlignItems = 'MIN';
+  }
+
+  speaker_group.layoutSizingVertical = 'HUG';
+  speaker_group.layoutSizingHorizontal = 'HUG';
+  
+  speaker_group.fills = [];
+
+  speaker_group.maxWidth = settings.SPEAKER_CONTENT_SIZE;
+
+  return speaker_group;
 }
 
 function generateText(text, fontname, weight, size){
@@ -312,10 +356,14 @@ function generateText(text, fontname, weight, size){
   textNode.characters = text ?? " ";
   textNode.fontName = { family: fontname, style: weight};
   textNode.fontSize = size;
-  textNode.textAlignHorizontal = 'CENTER';
+  textNode.textAlignHorizontal = settings.LAYOUT == "HORIZONTAL" ? 'CENTER' : 'LEFT';
   textNode.textAlignVertical = 'CENTER';
   textNode.textAutoResize = 'WIDTH_AND_HEIGHT';
   textNode.resize(settings.SPEAKER_CONTENT_SIZE, textNode.height);
+
+  if(settings.LAYOUT == "VERTICAL"){
+    textNode.textAutoResize = 'HEIGHT';
+  }
 
   return textNode;
 
