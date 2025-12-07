@@ -33,8 +33,16 @@
     parent.postMessage({ pluginMessage: { type: 'GENERATE', data: selected } }, '*');  
   }
 
+  function generatePro(){
+    parent.postMessage({ pluginMessage: { type: 'GENERATE_PRO', data: selected } }, '*');  
+  }
+
   function generateMultiple(){
     parent.postMessage({ pluginMessage: { type: 'GENERATE_MULTIPLE', data: agenda_list[date][time] } }, '*');  
+  }
+
+  function generateProMultiple(){
+    parent.postMessage({ pluginMessage: { type: 'GENERATE_PRO_MULTIPLE', data: agenda_list[date][time] } }, '*');  
   }
 
   async function loadEvents(){
@@ -229,6 +237,9 @@
         <div class="mb-sm">
           <button on:click={()=>{generateMultiple();}} class="button">Generate All</button>
         </div>
+        <div class="mb-sm">
+          <button on:click={()=>{generateProMultiple();}} class="button">Generate All Pro</button>
+        </div>
       {/if}
 
       {#if date && time}
@@ -272,6 +283,7 @@
 
           <div class="mb-sm">
             <button on:click={()=>{generate();}} class="button">Generate</button>
+            <button on:click={()=>{generatePro();}} class="button">Generate Pro</button>
           </div>
         </div>
 
