@@ -4,11 +4,11 @@ figma.ui.onmessage = (msg) => {
   const { type, data } = msg
 
   if (type === `GENERATE_PRO`) {
-    generateProBackdrop(data);
+    generateProBackdrop(data).catch(e => figma.notify(e.message, { error: true }));
   }
 
   if (type === `GENERATE_PRO_MULTIPLE`) {
-    generateProMultipleBackdrop(data);
+    generateProMultipleBackdrop(data).catch(e => figma.notify(e.message, { error: true }));
   }
 
   if (type === `GENERATE`) {
@@ -204,10 +204,32 @@ async function generateProBackdrop(data){
 
 async function generatePro(template, data){
 
+  console.log(template);
+
   let frame = template.clone();
 
-  let speaker_layout = findFrameInParent(frame, '@layout');
-  let speaker_frame = findFrameInParent(speaker_layout, '@speaker');
+  console.log(frame);
+
+  // Match by layer name only (any node type), ignoring whitespace and
+  // invisible chars that sneak in when layer names are copy-pasted.
+  const named = (root, name) =>
+    root.findOne(n => n.name.replace(/[\s\u200B-\u200D\u2060\uFEFF]/g, '') === name);
+
+  let speaker_layout = named(frame, '@layout');
+  let speaker_frame = speaker_layout && named(speaker_layout, '@speaker');
+
+  if (!speaker_layout || !speaker_frame) {
+    // Show real names with non-ASCII escaped, so lookalike chars are visible.
+    const found = ((speaker_layout || frame).children || [])
+      .map(c => JSON.stringify(c.name).replace(/[^\x20-\x7E]/g, ch => '\\u' + ch.charCodeAt(0).toString(16).padStart(4, '0')))
+      .join(', ');
+    frame.remove();
+    const msg = (!speaker_layout
+      ? 'Template is missing a layer named "@layout"'
+      : 'No layer named "@speaker" inside "@layout"') + `. Found: ${found}`;
+    console.error(msg);
+    throw new Error(msg);
+  }
 
   // load font
   const textNodes = template.findAll(node => node.type === "TEXT") as TextNode[];
@@ -308,29 +330,6 @@ async function generatePro(template, data){
 
   return frame;
   
-}
-
-function findFrameInParent(parentNode, targetFrameName) {
-  if (!parentNode || !("children" in parentNode)) {
-    console.warn("Invalid parent node provided.");
-    return null;
-  }
-
-  // Depth-first search
-  for (const child of parentNode.children) {
-    // Check if this child is the frame we want
-    if (child.type === "FRAME" && child.name === targetFrameName) {
-      return child;
-    }
-
-    // If child has its own children, search recursively
-    if ("children" in child) {
-      const found = findFrameInParent(child, targetFrameName);
-      if (found) return found;
-    }
-  }
-
-  return null; // Not found anywhere inside
 }
 
 async function generateMultipleBackdrop(agenda_list){
