@@ -1,416 +1,447 @@
-<script lang="ts">
-  import {onMount} from 'svelte';
+<script>
+  import { onMount } from 'svelte'
 
-  let agenda_list = [];
-  let event_list = [];
+  const API = 'https://events.startupmission.in/api'
 
-  let date;
-  let time;
-  let item;
+  let event_list = []
+  let event = ''
+  let agenda_list = {}
 
-  let page = "main";
+  let date = ''
+  let venue = ''
+  let item = ''
 
-  let settings = {};
+  let loadingEvents = false
+  let loadingAgenda = false
+  let busy = false
+  let error = ''
+  let showHelp = false
 
-  let event = "";
+  $: dates = Object.keys(agenda_list)
+  $: venues = date ? Object.keys(agenda_list[date] || {}) : []
+  $: sessions = (date && venue && agenda_list[date]?.[venue]) || []
+  $: selected = item === '' ? null : sessions[item]
+  $: speakers = selected?.speakers ? Object.values(selected.speakers).flat() : []
 
-  $:selected = agenda_list && date && time && item ? agenda_list[date][time][item] : {};
-
-  async function loadData(){
-    let data = await fetch(`https://events.startupmission.in/api/event/${event}/agenda/venue`).then(response => response.json());
-    agenda_list = data.agenda;
-
-    date = "";
-    time = "";
-    item = "";
-
-    parent.postMessage({ pluginMessage: { type: 'EVENT', data: event } }, '*');  
-
-    // console.log(agenda_list);
+  async function getJSON(path) {
+    const res = await fetch(`${API}/${path}`)
+    if (!res.ok) throw new Error(`Request failed (${res.status})`)
+    return res.json()
   }
 
-  function generate(){
-    parent.postMessage({ pluginMessage: { type: 'GENERATE', data: selected } }, '*');  
+  async function loadEvents() {
+    loadingEvents = true
+    error = ''
+    try {
+      event_list = await getJSON('events')
+    } catch (e) {
+      error = `Couldn't load events: ${e.message}`
+    }
+    loadingEvents = false
   }
 
-  function generatePro(){
-    parent.postMessage({ pluginMessage: { type: 'GENERATE_PRO', data: selected } }, '*');  
+  async function loadData() {
+    loadingAgenda = true
+    error = ''
+    try {
+      const data = await getJSON(`event/${event}/agenda/venue`)
+      agenda_list = data.agenda || {}
+      date = ''
+      venue = ''
+      item = ''
+      post('EVENT', event)
+    } catch (e) {
+      error = `Couldn't load agenda: ${e.message}`
+    }
+    loadingAgenda = false
   }
 
-  function generateMultiple(){
-    parent.postMessage({ pluginMessage: { type: 'GENERATE_MULTIPLE', data: agenda_list[date][time] } }, '*');  
+  function post(type, data) {
+    parent.postMessage({ pluginMessage: { type, data } }, '*')
   }
 
-  function generateProMultiple(){
-    parent.postMessage({ pluginMessage: { type: 'GENERATE_PRO_MULTIPLE', data: agenda_list[date][time] } }, '*');  
+  function run(type, data) {
+    busy = true
+    post(type, data)
   }
 
-  async function loadEvents(){
-    let data = await fetch(`https://events.startupmission.in/api/events`).then(response => response.json());
-    event_list = data;
-    date = "";
-    time = "";
-    item = "";
-  }
-
-  function saveSettings(){
-    parent.postMessage({ pluginMessage: { type: 'SETTINGS', data: settings } }, '*'); 
-    page = "main"; 
-  }
-
-  function defaultSettings(){
-    parent.postMessage({ pluginMessage: { type: 'DEFAULT', data: '' } }, '*'); 
-    page = "main"; 
-  }
-
-  onMount(()=>{
-    loadEvents();
-  })
+  const describe = (s) => [s.designation, s.organisation].filter(Boolean).join(' · ')
 
   onmessage = (e) => {
-    var event_data = e.data.pluginMessage;
-
-    
-    if(event_data.type == "settings"){
-      settings = event_data.data;
-    }
-
-    if(event_data.type == "event"){
-      event = event_data.data;
-    }
-
+    const msg = e.data?.pluginMessage
+    if (!msg) return
+    if (msg.type === 'event') event = msg.data
+    if (msg.type === 'done') busy = false
   }
 
+  onMount(loadEvents)
 </script>
 
-<div class="p-xsmall wrapper flex column base">
-
-  {#if page=="settings"}
+<main>
+  <header>
     <div>
-
-      <div class="flex justify-end mb-3 w-full">
-        <button on:click={()=>{ page = "main" }}>
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
-            <path fill-rule="evenodd" d="M9.53 2.47a.75.75 0 010 1.06L4.81 8.25H15a6.75 6.75 0 010 13.5h-3a.75.75 0 010-1.5h3a5.25 5.25 0 100-10.5H4.81l4.72 4.72a.75.75 0 11-1.06 1.06l-6-6a.75.75 0 010-1.06l6-6a.75.75 0 011.06 0z" clip-rule="evenodd" />
-          </svg>               
-        </button>  
-      </div>
-
-      <div class="flex flex-row gap-5 mb-3">
-
-        <div class="flex-1">
-          <div class="mb-1">Heading Size</div>
-          <input bind:value={settings.HEADING_SIZE} type="number" />
-        </div>
-
-      </div>
-
-      <div class="mb-1">Speaker Settings</div>
-
-      <div class="flex flex-row gap-5 mb-3">
-
-        <div class="flex-1">
-          <div class="mb-1">Image Width</div>
-          <input bind:value={settings.SPEAKER_IMAGE_SIZE} type="number" />
-        </div>
-
-        <div class="flex-1">
-          <div class="mb-1">Content Width</div>
-          <input bind:value={settings.SPEAKER_CONTENT_SIZE} type="number" />
-        </div>
-
-      </div>
-
-      <div class="flex flex-row gap-5 mb-3">
-
-        <div class="flex-1">
-          <div class="mb-1">Stroke Color</div>
-          <input bind:value={settings.SPEAKER_STROKE_COLOR} />
-        </div>
-
-        <div class="flex-1">
-          <div class="mb-1">Stroke Width</div>
-          <input bind:value={settings.SPEAKER_STROKE_WIDTH} type="number" />
-        </div>
-
-      </div>
-
-      <div class="flex flex-row gap-5 mb-3">
-
-        <div class="flex-1">
-          <div class="mb-1">Name Size</div>
-          <input bind:value={settings.NAME_FONT_SIZE} type="number" />
-        </div>
-
-        <div class="flex-1">
-          <div class="mb-1">Content Size</div>
-          <input bind:value={settings.CONTENT_FONT_SIZE} type="number" />
-        </div>
-
-      </div>
-
-
-      <div class="flex flex-row gap-5 mb-3">
-
-        <div class="flex-1">
-          <div class="mb-1">Image Style</div>
-          <div class="mb-sm custom-select">
-            <select bind:value={settings.SPEAKER_IMAGE_TYPE} >
-              <option value="C">Circle</option>
-              <option value="CBR">Circle Border Right</option>
-              <option value="CBL">Circle Border Left</option>
-              <option value="BR">Rounded Border Right</option>
-              <option value="BL">Rounded Border Left</option>
-              <option value="SQ">Square</option>
-            </select>
-          </div>
-        </div>
-
-      </div>
-
-      <div class="flex flex-row gap-5 mb-3">
-
-        <div class="flex-1">
-          <div class="mb-1">Layout</div>
-          <div class="mb-sm custom-select">
-            <select bind:value={settings.LAYOUT} >
-              <option value="HORIZONTAL">HORIZONTAL</option>
-              <option value="VERTICAL">VERTICAL</option>
-            </select>
-          </div>
-        </div>
-
-      </div>
-
-      <div class="mb-sm flex gap-5 justify-center ">
-        <button on:click={()=>{saveSettings();}} class="button">Save Settings</button>
-        <button on:click={()=>{defaultSettings();}} class="button">Load Default</button>
-      </div>
-
+      <h1>AutoDrop</h1>
+      <p class="muted">Agenda backdrops from your template</p>
     </div>
-  {/if}
+    <button class="secondary" on:click={() => run('GENERATE_TEMPLATE')} disabled={busy} title="Create a starter template frame on the canvas">
+      New template
+    </button>
+  </header>
 
-  {#if page=="main"}
-    <div>
-      
-      <div class="flex justify-end mb-3 w-full">
-        <button on:click={()=>{ page = "settings" }}>
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
-            <path fill-rule="evenodd" d="M11.078 2.25c-.917 0-1.699.663-1.85 1.567L9.05 4.889c-.02.12-.115.26-.297.348a7.493 7.493 0 00-.986.57c-.166.115-.334.126-.45.083L6.3 5.508a1.875 1.875 0 00-2.282.819l-.922 1.597a1.875 1.875 0 00.432 2.385l.84.692c.095.078.17.229.154.43a7.598 7.598 0 000 1.139c.015.2-.059.352-.153.43l-.841.692a1.875 1.875 0 00-.432 2.385l.922 1.597a1.875 1.875 0 002.282.818l1.019-.382c.115-.043.283-.031.45.082.312.214.641.405.985.57.182.088.277.228.297.35l.178 1.071c.151.904.933 1.567 1.85 1.567h1.844c.916 0 1.699-.663 1.85-1.567l.178-1.072c.02-.12.114-.26.297-.349.344-.165.673-.356.985-.57.167-.114.335-.125.45-.082l1.02.382a1.875 1.875 0 002.28-.819l.923-1.597a1.875 1.875 0 00-.432-2.385l-.84-.692c-.095-.078-.17-.229-.154-.43a7.614 7.614 0 000-1.139c-.016-.2.059-.352.153-.43l.84-.692c.708-.582.891-1.59.433-2.385l-.922-1.597a1.875 1.875 0 00-2.282-.818l-1.02.382c-.114.043-.282.031-.449-.083a7.49 7.49 0 00-.985-.57c-.183-.087-.277-.227-.297-.348l-.179-1.072a1.875 1.875 0 00-1.85-1.567h-1.843zM12 15.75a3.75 3.75 0 100-7.5 3.75 3.75 0 000 7.5z" clip-rule="evenodd" />
-          </svg>      
-        </button>  
+  <div class="content">
+    <section>
+      <label for="event">Event</label>
+      <div class="row">
+        {#if event_list.length}
+          <select id="event" bind:value={event}>
+            {#each event_list as e}
+              <option value={e.slug}>{e.name}</option>
+            {/each}
+          </select>
+        {:else}
+          <select id="event" disabled>
+            <option>{loadingEvents ? 'Loading events…' : 'No events'}</option>
+          </select>
+        {/if}
+        <button class="primary" on:click={loadData} disabled={!event || loadingAgenda}>
+          {loadingAgenda ? 'Loading…' : 'Load'}
+        </button>
       </div>
-      
-      <div class="mb-sm custom-select">
-        <select bind:value={event} style="max-width: 100%;">
-          {#each event_list as event_item}
-            <option value="{event_item.slug}">{event_item.name}</option>
+    </section>
+
+    {#if error}
+      <p class="error">{error}</p>
+    {/if}
+
+    {#if dates.length}
+      <section class="pair">
+        <div>
+          <label for="date">Date</label>
+          <select id="date" bind:value={date} on:change={() => { venue = ''; item = '' }}>
+            <option value="" disabled>Choose date</option>
+            {#each dates as d}
+              <option value={d}>{d}</option>
+            {/each}
+          </select>
+        </div>
+        <div>
+          <label for="venue">Venue</label>
+          <select id="venue" bind:value={venue} on:change={() => (item = '')} disabled={!date}>
+            <option value="" disabled>Choose venue</option>
+            {#each venues as v}
+              <option value={v}>{v}</option>
+            {/each}
+          </select>
+        </div>
+      </section>
+    {/if}
+
+    {#if sessions.length}
+      <section>
+        <label for="session">Session</label>
+        <select id="session" bind:value={item}>
+          <option value="" disabled>Choose session</option>
+          {#each sessions as s, i}
+            <option value={i}>{s.name}</option>
           {/each}
         </select>
-      </div>
+      </section>
 
-      <div class="mb-sm">
-        <button on:click={()=>{loadData();}} class="button">Load Data</button>
-      </div>
+      {#if selected}
+        <section class="card">
+          {#if selected.category}
+            <div class="eyebrow">{selected.category}</div>
+          {/if}
+          <div class="title">{selected.name}</div>
 
-      {#if Object.keys(agenda_list).length > 0}
-        <div class="mb-sm custom-select">
-          <select bind:value={date}>
-            {#each Object.keys(agenda_list) as date}
-              <option>{date}</option>
-            {/each}
-          </select>
-        </div>
-      {/if}
-
-      {#if date}
-        <div class="mb-sm custom-select">
-          <select bind:value={time} style="max-width: 100%;">
-            {#each Object.keys(agenda_list[date]) as time}
-              <option>{time}</option>
-            {/each}
-          </select>
-        </div>
-      {/if}
-
-      {#if date && time}
-        <div class="mb-sm">
-          <button on:click={()=>{generateMultiple();}} class="button">Generate All</button>
-        </div>
-        <div class="mb-sm">
-          <button on:click={()=>{generateProMultiple();}} class="button">Generate All Pro</button>
-        </div>
-      {/if}
-
-      {#if date && time}
-        <div class="mb-sm custom-select">
-          <select bind:value={item} style="max-width: 100%;">
-            {#each Object.keys(agenda_list[date][time]) as item}
-              <option value={item}>{agenda_list[date][time][item].name}</option>
-            {/each}
-          </select>
-        </div>
-      {/if}
-
-      {#if date && time && item}
-        
-        <div class="preview-container">
-          <div class="preview">
-            <div class="title">{selected.name}</div>
-
-            {#if selected.speakers}
-              <div class="speakers">
-                {#each Object.entries(selected.speakers) as [category, speaker_list]}
-                  {#each speaker_list as {name, designation, organisation, photo, linkedin}}  
-                    <div class="speaker">
-                      
-                        <div class="image">
-                          <img src="{photo}" alt="name" class="">
-                        </div>
-                        <div class="details">
-                          <div class="name">{name}</div>
-                          <div class="designation">{designation}</div>
-                          <div class="organisation">{organisation ?? ''}</div>
-                        </div>
-
-                    </div>
-                  {/each}
-                {/each}
+          {#each speakers as s}
+            <div class="speaker">
+              {#if s.photo}
+                <img src={s.photo} alt={s.name} />
+              {:else}
+                <div class="avatar">{(s.name || '?')[0]}</div>
+              {/if}
+              <div class="details">
+                <div class="name">{s.name}</div>
+                {#if describe(s)}
+                  <div class="muted">{describe(s)}</div>
+                {/if}
               </div>
-            {/if}
-
-          </div>
-
-          <div class="mb-sm">
-            <button on:click={()=>{generate();}} class="button">Generate</button>
-            <button on:click={()=>{generatePro();}} class="button">Generate Pro</button>
-          </div>
-        </div>
-
+            </div>
+          {:else}
+            <div class="muted">No speakers</div>
+          {/each}
+        </section>
       {/if}
-      
-    </div>
-  {/if}
+    {/if}
+  </div>
 
-</div>
+  <footer>
+    {#if sessions.length}
+      <div class="row">
+        <button class="primary grow" on:click={() => run('GENERATE_PRO', selected)} disabled={!selected || busy}>
+          {busy ? 'Working…' : 'Generate'}
+        </button>
+        <button class="secondary grow" on:click={() => run('GENERATE_PRO_MULTIPLE', sessions)} disabled={busy}>
+          Generate all ({sessions.length})
+        </button>
+      </div>
+    {/if}
+
+    <p class="muted hint">
+      Select your template frame on the canvas first.
+      <button class="link" on:click={() => (showHelp = !showHelp)}>{showHelp ? 'Hide' : 'Template rules'}</button>
+    </p>
+
+    {#if showHelp}
+      <ul class="help muted">
+        <li>Text containing <code>#name</code>, <code>#category</code>, <code>#start_time</code>… is replaced with session data.</li>
+        <li>A frame named <code>@layout</code> holds one <code>@speaker</code> card, repeated per speaker.</li>
+        <li>Inside the card: <code>#name</code>, <code>#designation</code>, <code>#organisation</code>; a layer named <code>#photo</code> with an image fill gets the speaker photo.</li>
+      </ul>
+    {/if}
+  </footer>
+</main>
 
 <style>
-  .base{
-    font-size: 14px;
-    font-weight: normal;
+  :global(*) {
+    box-sizing: border-box;
+  }
+
+  :global(html),
+  :global(body) {
+    height: 100%;
+    margin: 0;
+  }
+
+  :global(body) {
+    font: 11px/16px Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+    background: var(--figma-color-bg, #fff);
+    color: var(--figma-color-text, #1e1e1e);
+  }
+
+  main {
     display: flex;
     flex-direction: column;
-    flex: 1;
-    padding: 10px;
-  }
-  .mb-sm{
-    margin-bottom: 10px;
-  }
-  .button {
-    background-color: blue;
-    color: white;
-    padding: 3px 10px;
-    font-size: 12px;
-    border-radius: 9999px;
-  }
-  .wrapper {
-    text-align: center;
     height: 100%;
   }
 
-  input {
-    width:100%;
-    resize: vertical;
-    padding: 5px 8px;
-    border-radius:5px;
-    border:0;
-    box-shadow:4px 4px 10px rgba(0,0,0,0.06);
-    border: 1px solid #caced1;
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--figma-color-border, #e6e6e6);
+  }
+
+  h1 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  header p {
+    margin: 0;
+  }
+
+  .content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  footer {
+    padding: 12px 16px;
+    border-top: 1px solid var(--figma-color-border, #e6e6e6);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  section {
+    margin: 0;
+  }
+
+  label {
+    display: block;
+    margin-bottom: 4px;
+    font-weight: 500;
+    color: var(--figma-color-text-secondary, #757575);
+  }
+
+  .row {
+    display: flex;
+    gap: 8px;
+  }
+
+  .pair {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .grow {
+    flex: 1;
+  }
+
+  .muted {
+    color: var(--figma-color-text-secondary, #757575);
   }
 
   select {
     appearance: none;
-    /* safari */
     -webkit-appearance: none;
-    /* other styles for aesthetics */
     width: 100%;
-    padding: 5px 8px;
-    background-color: #fff;
-    border: 1px solid #caced1;
-    border-radius: 0.25rem;
-    color: #000;
+    min-width: 0;
+    height: 32px;
+    padding: 0 24px 0 8px;
+    font: inherit;
+    color: inherit;
+    background-color: var(--figma-color-bg, #fff);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5' fill='none' stroke='%23999' stroke-width='1.2'%3E%3Cpath d='M.5.5 4 4 7.5.5'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    border: 1px solid var(--figma-color-border, #e6e6e6);
+    border-radius: 5px;
+    text-overflow: ellipsis;
     cursor: pointer;
     outline: none;
   }
 
-  .custom-select{
-    position: relative;
+  select:focus {
+    border-color: var(--figma-color-border-selected, #0d99ff);
   }
 
-  .custom-select::before,
-  .custom-select::after {
-    --size: 0.3rem;
-    position: absolute;
-    content: "";
-    right: 1rem;
-    pointer-events: none;
+  select:disabled {
+    opacity: 0.5;
+    cursor: default;
   }
 
-  .custom-select::before {
-    border-left: var(--size) solid transparent;
-    border-right: var(--size) solid transparent;
-    border-bottom: var(--size) solid black;
-    top: 40%;
+  button {
+    height: 32px;
+    padding: 0 12px;
+    font: inherit;
+    font-weight: 500;
+    border-radius: 5px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    white-space: nowrap;
   }
 
-  .custom-select::after {
-    border-left: var(--size) solid transparent;
-    border-right: var(--size) solid transparent;
-    border-top: var(--size) solid black;
-    top: 55%;
+  button:disabled {
+    opacity: 0.4;
+    cursor: default;
   }
 
-  .preview{
-    padding: 10px;
-    margin-bottom: 10px;
-    background-color: #f0eded;
-    border-radius: 10px;
+  .primary {
+    background: var(--figma-color-bg-brand, #0d99ff);
+    color: var(--figma-color-text-onbrand, #fff);
   }
 
-  .preview .title{
-      margin-bottom: 10px;
+  .primary:not(:disabled):hover {
+    background: var(--figma-color-bg-brand-hover, #007be5);
   }
 
-  .preview .speakers{
+  .secondary {
+    background: transparent;
+    color: inherit;
+    border-color: var(--figma-color-border-strong, #d9d9d9);
+  }
+
+  .secondary:not(:disabled):hover {
+    background: var(--figma-color-bg-hover, #f5f5f5);
+  }
+
+  .link {
+    height: auto;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--figma-color-text-brand, #0d99ff);
+  }
+
+  .error {
+    margin: 0;
+    padding: 8px;
+    border-radius: 5px;
+    color: var(--figma-color-text-danger, #dc3412);
+    background: var(--figma-color-bg-danger-tertiary, #fff1ee);
+  }
+
+  .card {
+    padding: 12px;
+    border-radius: 8px;
+    background: var(--figma-color-bg-secondary, #f5f5f5);
     display: flex;
-    gap: 5px;
     flex-direction: column;
+    gap: 8px;
   }
 
-  .preview .speaker{
-    display: flex;
-    flex-direction: row;
-    gap: 5px;
-    align-items: center;
+  .eyebrow {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--figma-color-text-brand, #0d99ff);
   }
 
-  .preview .speaker .image{
-    flex-shrink: 0;
-  }
-
-  .preview .speaker .image img{
-    border-radius: 100%;
-    width: 75px;
-    height: 75px;
-  }
-
-  .preview .speaker .details{
-    font-weight: normal;
+  .title {
     font-size: 12px;
-    text-align: left;
+    font-weight: 600;
+    margin-bottom: 4px;
   }
 
-  .preview-container{
-    margin-bottom: 10px;
+  .speaker {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .speaker img,
+  .avatar {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+
+  .avatar {
+    display: grid;
+    place-items: center;
+    font-weight: 600;
+    background: var(--figma-color-bg-tertiary, #e6e6e6);
+  }
+
+  .details {
+    min-width: 0;
+  }
+
+  .name {
+    font-weight: 500;
+  }
+
+  .hint {
+    margin: 0;
+  }
+
+  .help {
+    margin: 0;
+    padding-left: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 10px;
+    padding: 0 3px;
+    border-radius: 3px;
+    background: var(--figma-color-bg-secondary, #f5f5f5);
   }
 </style>

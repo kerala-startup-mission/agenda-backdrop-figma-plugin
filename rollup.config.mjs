@@ -3,10 +3,7 @@ import commonjs from "@rollup/plugin-commonjs"
 import typescript from "@rollup/plugin-typescript"
 import html from "@rollup/plugin-html"
 import svelte from "rollup-plugin-svelte"
-import { terser } from "rollup-plugin-terser"
-import svg from "rollup-plugin-svg"
-import postcss from "rollup-plugin-postcss"
-import cssnano from "cssnano"
+import terser from "@rollup/plugin-terser"
 
 const production = !process.env.ROLLUP_WATCH
 
@@ -23,6 +20,8 @@ const mainConfig = {
   plugins: [
     typescript(),
     svelte({
+      // Component CSS is injected at runtime; the UI is a single inline HTML file anyway.
+      emitCss: false,
       compilerOptions: {
         dev: !production,
       },
@@ -32,11 +31,6 @@ const mainConfig = {
       dedupe: (importee) => importee === `svelte` || importee.startsWith(`svelte/`),
     }),
     commonjs(),
-    svg(),
-    postcss({
-      extensions: [`.css`],
-      plugins: [cssnano()],
-    }),
     html({
       fileName: `ui.html`,
       template({ bundle }) {
@@ -45,7 +39,7 @@ const mainConfig = {
 <html lang="en">
   <head>
     <meta charset="utf-8">
-    <title>Figma Plugin Example</title>
+    <title>AutoDrop</title>
   </head>
   <body>
     <script>${bundle[`bundle.js`].code}</script>
@@ -58,6 +52,11 @@ const mainConfig = {
   ],
   watch: {
     clearScreen: false,
+  },
+  onwarn(warning, warn) {
+    // Svelte's runtime has internal import cycles; they're harmless noise.
+    if (warning.code === `CIRCULAR_DEPENDENCY` && warning.ids?.every((id) => id.includes(`node_modules/svelte/`))) return
+    warn(warning)
   },
 }
 

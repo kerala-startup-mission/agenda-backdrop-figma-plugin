@@ -1,688 +1,249 @@
-figma.showUI(__html__, { width: 320, height: 400 })
+type Values = Record<string, unknown>
+type Session = Values & { name?: string; speakers?: Record<string, Values[]> | null }
+type Container = SceneNode & ChildrenMixin
 
-figma.ui.onmessage = (msg) => {
-  const { type, data } = msg
+const DEFAULT_EVENT = 'huddle-global-2023'
+// 1×1 gray PNG used as the #photo placeholder in generated templates.
+const PLACEHOLDER_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAAAAAA6fptVAAAACklEQVR4nGM4AwAAzgDN1GaQsAAAAABJRU5ErkJggg=='
 
-  if (type === `GENERATE_PRO`) {
-    generateProBackdrop(data).catch(e => figma.notify(e.message, { error: true }));
+figma.showUI(__html__, { width: 360, height: 560, themeColors: true })
+
+figma.ui.onmessage = async ({ type, data }) => {
+  try {
+    if (type === 'GENERATE_PRO') await generateProBackdrop(data)
+    else if (type === 'GENERATE_PRO_MULTIPLE') await generateProMultipleBackdrop(data)
+    else if (type === 'GENERATE_TEMPLATE') await createTemplate()
+    else if (type === 'EVENT') await figma.clientStorage.setAsync('event', data)
+  } catch (e) {
+    figma.notify(e instanceof Error ? e.message : String(e), { error: true })
   }
-
-  if (type === `GENERATE_PRO_MULTIPLE`) {
-    generateProMultipleBackdrop(data).catch(e => figma.notify(e.message, { error: true }));
-  }
-
-  if (type === `GENERATE`) {
-    generateBackdrop(data);
-  }
-
-  if (type === 'GENERATE_MULTIPLE'){
-    generateMultipleBackdrop(data);
-  }
-
-  if (type === `SETTINGS`) {
-    saveSettings(data);
-  }
-
-  if (type === `EVENT`) {
-    saveEvent(data);
-  }
-
-  if (type === `DEFAULT`){
-
-    settings = default_settings;
-
-    figma.ui.postMessage({
-      type: "settings",
-      data: default_settings
-    });
-
-  }
-
+  figma.ui.postMessage({ type: 'done' })
 }
 
-let settings = {};
+figma.clientStorage.getAsync('event').then((event) => {
+  figma.ui.postMessage({ type: 'event', data: event || DEFAULT_EVENT })
+})
 
-let default_settings = {
-  HEADING_SIZE : 100,
-  SPEAKER_IMAGE_SIZE : 250,
-  SPEAKER_CONTENT_SIZE : 400,
-  SPEAKER_STROKE_COLOR : "#C70000",
-  SPEAKER_IMAGE_TYPE : 'BR',
-  SPEAKER_STROKE_WIDTH : 5,
-  NAME_FONT_SIZE: 30,
-  CONTENT_FONT_SIZE: 25,
-  LAYOUT: 'HORIZONTAL'
+function getTemplate(): Container {
+  const node = figma.currentPage.selection[0]
+  if (!node || !('children' in node)) throw new Error('Select a template frame first')
+  return node
 }
 
-// let HEADING_SIZE = 100;
-// let SPEAKER_IMAGE_SIZE = 250;
-// let SPEAKER_CONTENT_SIZE = 400;
-// let SPEAKER_STROKE_COLOR = "#C70000";
-// let SPEAKER_IMAGE_TYPE = 'BR';
-// let SPEAKER_STROKE_WIDTH = 5;
+const parentOf = (node: SceneNode) => node.parent as BaseNode & ChildrenMixin
 
-init();
+async function generateProBackdrop(session: Session) {
+  const template = getTemplate()
+  const frame = await generatePro(template, session, (f) => {
+    parentOf(template).appendChild(f)
+    f.x = template.x + template.width + 10
+    f.y = template.y
+  })
 
-async function init(){
-  await loadSettings();
-
-  let event = await loadEvent();
-
-  figma.ui.postMessage({
-    type: "settings",
-    data: settings
-  });
-
-  figma.ui.postMessage({
-    type: "event",
-    data: event
-  });
-
+  figma.notify(`Generated "${frame.name}"`)
 }
 
-async function loadEvent(){
+async function generateProMultipleBackdrop(sessions: Session[]) {
+  if (!sessions?.length) throw new Error('No sessions to generate')
 
-  let saved_event = await figma.clientStorage.getAsync('event');
+  const template = getTemplate()
+  const { x, y, width, height } = template
 
-  if(saved_event){
-    return saved_event;
-  }
-  else{
-    return "huddle-global-2023";
-  }
+  const cols = 10
+  const spacing = 50
+  const rows = Math.ceil(sessions.length / cols)
 
-}
-
-async function saveEvent(data){
-  figma.clientStorage.setAsync('event', data);
-}
-
-async function loadSettings(){
-
-  let saved_settings = await figma.clientStorage.getAsync('settings');
-
-  if(saved_settings){
-    settings = JSON.parse(saved_settings);
-  }
-  else{
-    settings = default_settings;
-  }
-
-}
-
-async function saveSettings(data){
-  figma.clientStorage.setAsync('settings', JSON.stringify(data));
-  settings = data;
-}
-
-async function generateProMultipleBackdrop(data){
-
-  if(figma.currentPage.selection.length <= 0){
-    alert('Please select a frame');
-    return;
-  }
-
-  var template = figma.currentPage.selection[0];
-
-  if(typeof template?.children === 'undefined'){
-    alert('Please select a frame');
-    return;
-  }
-
-  const { x, y, width, height } = template;
-
-  const cols = 10;
-  const spacing = 50;
-
-  const rows = Math.ceil(data.length / cols);
-
-  var repeater = figma.createFrame();
-
-  repeater.fills = [];
+  const repeater = figma.createFrame()
+  repeater.fills = []
 
   // Auto Layout grid with wrap
-  repeater.layoutMode = "HORIZONTAL";
-  repeater.layoutWrap = "WRAP";
-  repeater.primaryAxisAlignItems = "CENTER";
-  repeater.counterAxisAlignItems = "CENTER";
-  repeater.itemSpacing = spacing;
-  repeater.counterAxisSpacing = spacing;
-  repeater.paddingLeft = 0;
-  repeater.paddingRight = 0;
-  repeater.paddingTop = 0;
-  repeater.paddingBottom = 0;
+  repeater.layoutMode = 'HORIZONTAL'
+  repeater.layoutWrap = 'WRAP'
+  repeater.primaryAxisAlignItems = 'CENTER'
+  repeater.counterAxisAlignItems = 'CENTER'
+  repeater.itemSpacing = spacing
+  repeater.counterAxisSpacing = spacing
 
   // Fix the container size so wrap respects our exact cols/rows
-  repeater.primaryAxisSizingMode = "FIXED";
-  repeater.counterAxisSizingMode = "FIXED";
+  repeater.primaryAxisSizingMode = 'FIXED'
+  repeater.counterAxisSizingMode = 'FIXED'
+  repeater.resize(width * cols + spacing * (cols - 1), height * rows + spacing * (rows - 1))
 
-  const targetWidth  = width  * cols + spacing * (cols - 1);
-  const targetHeight = height * rows + spacing * (rows - 1);
-  repeater.resize(targetWidth, targetHeight);
+  parentOf(template).appendChild(repeater)
+  repeater.x = x + width + 10
+  repeater.y = y
 
-  repeater.x = x + width + 10;
-  repeater.y = y;
-
-  data.forEach(async (item) => {
-
-    let frame = await generatePro(template, item);
-
-    repeater.appendChild(frame);
-
-  });
-
-  const parent = template.parent as (PageNode | FrameNode | ComponentNode);
-  parent.appendChild(repeater);
-
-}
-
-async function generateProBackdrop(data){
-
-  if(figma.currentPage.selection.length <= 0){
-    alert('Please select a frame');
-    return;
+  // Sequential so frames keep agenda order; each clone drops into the grid as soon as it's made.
+  try {
+    for (const session of sessions) await generatePro(template, session, (f) => repeater.appendChild(f))
+  } catch (e) {
+    repeater.remove()
+    throw e
   }
 
-  var template = figma.currentPage.selection[0];
-
-  if(typeof template?.children === 'undefined'){
-    alert('Please select a frame');
-    return;
-  }
-
-  let frame = await generatePro(template, data);
-
-  const { x, y, width, height } = template;
-
-  frame.x = x + width + 10;
-  frame.y = y;
-  
-  const parent = template.parent as (PageNode | FrameNode | ComponentNode);
-  parent.appendChild(frame);
-
+  figma.notify(`Generated ${sessions.length} backdrops`)
 }
 
-async function generatePro(template, data){
+// Layer names get stray whitespace / zero-width chars when copy-pasted.
+const clean = (name: string) => name.replace(/[\s\u200B-\u200D\u2060\uFEFF]/g, '')
 
-  console.log(template);
+const findContainer = (root: ChildrenMixin, name: string) =>
+  root.findOne((n) => 'children' in n && clean(n.name) === name) as Container | null
 
-  let frame = template.clone();
+const textsIn = (root: ChildrenMixin) => root.findAll((n) => n.type === 'TEXT') as TextNode[]
 
-  console.log(frame);
+type ImageNode = RectangleNode | EllipseNode | FrameNode
+const imagesIn = (root: ChildrenMixin) =>
+  root.findAll(
+    (n) =>
+      (n.type === 'RECTANGLE' || n.type === 'ELLIPSE' || n.type === 'FRAME') &&
+      Array.isArray(n.fills) &&
+      n.fills.some((f: Paint) => f.type === 'IMAGE'),
+  ) as ImageNode[]
 
-  // Match by layer name only (any node type), ignoring whitespace and
-  // invisible chars that sneak in when layer names are copy-pasted.
-  const named = (root, name) =>
-    root.findOne(n => n.name.replace(/[\s\u200B-\u200D\u2060\uFEFF]/g, '') === name);
+// `place` moves the fresh clone to its final spot before filling, so it never sits on top of the template.
+async function generatePro(template: Container, session: Session, place: (frame: Container) => void): Promise<Container> {
+  const frame = template.clone() as Container
+  place(frame)
 
-  let speaker_layout = named(frame, '@layout');
-  let speaker_frame = speaker_layout && named(speaker_layout, '@speaker');
+  const layout = findContainer(frame, '@layout')
+  const speakerCard = layout && findContainer(layout, '@speaker')
 
-  if (!speaker_layout || !speaker_frame) {
+  if (!layout || !speakerCard) {
     // Show real names with non-ASCII escaped, so lookalike chars are visible.
-    const found = ((speaker_layout || frame).children || [])
-      .map(c => JSON.stringify(c.name).replace(/[^\x20-\x7E]/g, ch => '\\u' + ch.charCodeAt(0).toString(16).padStart(4, '0')))
-      .join(', ');
-    frame.remove();
-    const msg = (!speaker_layout
-      ? 'Template is missing a layer named "@layout"'
-      : 'No layer named "@speaker" inside "@layout"') + `. Found: ${found}`;
-    console.error(msg);
-    throw new Error(msg);
+    const found = (layout || frame).children
+      .map((c) => JSON.stringify(c.name).replace(/[^\x20-\x7E]/g, (ch) => '\\u' + ch.charCodeAt(0).toString(16).padStart(4, '0')))
+      .join(', ')
+    frame.remove()
+    throw new Error(
+      (!layout ? 'Template is missing a layer named "@layout"' : 'No layer named "@speaker" inside "@layout"') + `. Found: ${found}`,
+    )
   }
 
-  // load font
-  const textNodes = template.findAll(node => node.type === "TEXT") as TextNode[];
-  for (const textNode of textNodes) {
-    await figma.loadFontAsync(textNode.fontName as FontName);
-  }
+  frame.name = session.name || frame.name
 
-  let speaker_category = data.speakers;
+  await loadFonts(textsIn(frame))
 
-  for (const category in speaker_category) {
-    
-    let speakers = speaker_category[category];
+  // Session-level placeholders: everything outside the speaker card.
+  const speakerTextIds = new Set(textsIn(speakerCard).map((t) => t.id))
+  fillText(
+    textsIn(frame).filter((t) => !speakerTextIds.has(t.id)),
+    session,
+  )
 
-    speakers.forEach(async (speaker) => {
+  const speakers = ([] as Values[]).concat(...Object.values(session.speakers ?? {}))
+  const imageJobs: Promise<void>[] = []
 
-      var speaker_clone = speaker_frame.clone();
+  for (const speaker of speakers) {
+    const card = speakerCard.clone() as Container
+    fillText(textsIn(card), speaker)
 
-      const textNodes = speaker_clone.findAll(node => node.type === "TEXT") as TextNode[];
-
-      for (const textNode of textNodes) {
-
-        const text = textNode.characters;
-
-        for(const key of Object.keys(speaker)){
-
-          let value = speaker[key] == null ? "" : speaker[key];
-
-          if (text.includes("#"+key)) {
-            textNode.characters = text.replace("#"+key, value);
-          }
-
-        }
-
-      };
-
-      const imageNodes = speaker_clone.findAll(node => {
-        if ((node.type === 'RECTANGLE' || node.type === 'ELLIPSE' || node.type === 'FRAME') && node.fills) {
-          const fills = node.fills as Paint[];
-          return fills.some(fill => fill.type === 'IMAGE');
-        }
-        return false;
-      });
-
-      for (const imageNode of imageNodes) {
-
-        const name = imageNode.name;
-
-        for(const key of Object.keys(speaker)){
-
-          if(name == "#"+key){
-
-            const image_url = speaker[key];
-            console.log(image_url)
-            const image = await figma.createImageAsync(image_url);
-
-            imageNode.fills = [
-              {
-                type : 'IMAGE',
-                imageHash: image.hash,
-                scaleMode: 'FILL'
-              }
-            ];
-
-          }
-
-        }
-
-      }
-
-      speaker_layout.appendChild(speaker_clone);
-      
-    });
-
-    
-    
-  }
-
-  speaker_frame.remove();
-
-  
-  const textNodesOuter = frame.findAll(node => node.type === "TEXT") as TextNode[];
-
-  for (const textNode of textNodesOuter) {
-
-    const text = textNode.characters;
-
-    for(const key of Object.keys(data)){
-
-      let value = data[key] == null ? "" : data[key];
-
-      if (text.includes("#"+key)) {
-        textNode.characters = text.replace("#"+key, value);
-      }
-
+    for (const node of imagesIn(card)) {
+      const name = clean(node.name)
+      const key = name.slice(1)
+      if (name[0] === '#' && key in speaker) imageJobs.push(setImage(node, speaker[key], speaker.name))
     }
 
-  };
+    layout.appendChild(card)
+  }
 
-  return frame;
-  
+  speakerCard.remove()
+  await Promise.all(imageJobs)
+
+  return frame
 }
 
-async function generateMultipleBackdrop(agenda_list){
-
-  if(figma.currentPage.selection.length <= 0){
-    alert('Please select a frame');
-    return;
+async function loadFonts(nodes: TextNode[]) {
+  const fonts = new Map<string, FontName>()
+  for (const t of nodes) {
+    const names = t.characters.length ? t.getRangeAllFontNames(0, t.characters.length) : [t.fontName as FontName]
+    for (const f of names) fonts.set(`${f.family}|${f.style}`, f)
   }
-
-  var frame = figma.currentPage.selection[0];
-
-  if(typeof frame?.children === 'undefined'){
-    alert('Please select a frame');
-    return;
-  }
-
-  // console.log(frame);
-
-  const { x, y, width, height } = frame;
-
-  const cols = 10;
-  const rows = 10;
-  const spacing = 50;
-
-  const actual_rows = Math.ceil(agenda_list.length / cols);
-
-  var repeater = figma.createFrame();
-
-  repeater.fills = [];
-
-  // Auto Layout grid with wrap
-  repeater.layoutMode = "HORIZONTAL";
-  repeater.layoutWrap = "WRAP";
-  repeater.primaryAxisAlignItems = "CENTER";
-  repeater.counterAxisAlignItems = "CENTER";
-  repeater.itemSpacing = spacing;
-  repeater.counterAxisSpacing = spacing;
-  repeater.paddingLeft = 0;
-  repeater.paddingRight = 0;
-  repeater.paddingTop = 0;
-  repeater.paddingBottom = 0;
-
-  // Fix the container size so wrap respects our exact cols/rows
-  repeater.primaryAxisSizingMode = "FIXED";
-  repeater.counterAxisSizingMode = "FIXED";
-
-  const targetWidth  = width  * cols + spacing * (cols - 1);
-  const targetHeight = height * actual_rows + spacing * (actual_rows - 1);
-  repeater.resize(targetWidth, targetHeight);
-
-  repeater.x = x + width + 10;
-  repeater.y = y + height;
-
-  for(var i = 0; i < agenda_list.length; i++){
-
-    const agenda = agenda_list[i];
-
-    const agenda_group = figma.createFrame();
-
-    agenda_group.fills = [];
-  
-    const heading = await generateHeading(frame, agenda);
-    agenda_group.appendChild(heading);
-
-    if(Object.keys(agenda.speakers).length){
-      const speaker_layout = await generateSpeakers(frame, agenda);    
-      agenda_group.appendChild(speaker_layout);
-    }
-
-    agenda_group.layoutMode = 'VERTICAL';
-    agenda_group.primaryAxisAlignItems = 'CENTER';
-    agenda_group.counterAxisAlignItems = 'CENTER';
-    agenda_group.itemSpacing = 50;
-
-    agenda_group.resize(width, height);
-
-    // console.log(agenda_group.fills);
-
-    const group = frame.clone();
-
-    group.appendChild(agenda_group);
-    
-    repeater.appendChild(group);
-
-  }
-
-  const parent = frame.parent as (PageNode | FrameNode | ComponentNode);
-
-  parent.appendChild(repeater);
-
+  await Promise.all([...fonts.values()].map((f) => figma.loadFontAsync(f)))
 }
 
-async function generateBackdrop(agenda){
+// Replace every "#key" with its value. Longest keys first so "#link_text" isn't eaten by "#link".
+function fillText(nodes: TextNode[], values: Values) {
+  const keys = Object.keys(values)
+    .filter((k) => values[k] === null || typeof values[k] !== 'object')
+    .sort((a, b) => b.length - a.length)
 
-  if(figma.currentPage.selection.length <= 0){
-    alert('Please select a frame');
-    return;
+  for (const node of nodes) {
+    const text = keys.reduce((s, k) => s.split('#' + k).join(values[k] == null ? '' : String(values[k])), node.characters)
+    if (text !== node.characters) node.characters = text
   }
-
-  var frame = figma.currentPage.selection[0];
-
-  if(typeof frame?.children === 'undefined'){
-    alert('Please select a frame');
-    return;
-  }
-
-  // console.log(frame);
-
-  let canvas_width = frame.width;
-  let canvas_height = frame.height;
-
-  // console.log(canvas_width, canvas_height);
-
-  const agenda_group = figma.createFrame();
-  
-  const heading = await generateHeading(frame, agenda);
-  agenda_group.appendChild(heading);
-
-  if(agenda.speakers){
-    const speaker_layout = await generateSpeakers(frame, agenda);    
-    agenda_group.appendChild(speaker_layout);
-  }
-
-  agenda_group.layoutMode = 'VERTICAL';
-  agenda_group.primaryAxisAlignItems = 'CENTER';
-  agenda_group.counterAxisAlignItems = 'CENTER';
-  agenda_group.itemSpacing = 50;
-
-  agenda_group.resize(canvas_width, canvas_height);
-
-  agenda_group.fills = [];
-
-  // console.log(agenda_group.fills);
-  
-  frame.appendChild(agenda_group);
-
 }
 
-async function generateSpeakers(frame, agenda){
-
-  var speakers = Object.values(agenda.speakers).flat();
-
-  const speaker_layout = figma.createFrame();
-
-  speakers.forEach(async (speaker) => {
-    const speaker_item = await generateSpeaker(frame, speaker);
-
-    speaker_layout.appendChild(speaker_item);
-  });
-
-  console.log(settings);
-
-  speaker_layout.layoutMode = settings.LAYOUT; //'HORIZONTAL';
-  
-  speaker_layout.primaryAxisAlignItems = 'CENTER';
-  speaker_layout.counterAxisAlignItems = 'MIN';
-
-  if(settings.LAYOUT == "HORIZONTAL"){
-    speaker_layout.layoutWrap = 'WRAP';
+async function setImage(node: ImageNode, url: unknown, who: unknown) {
+  try {
+    if (!url) throw new Error('missing')
+    const image = await figma.createImageAsync(String(url))
+    node.fills = [{ type: 'IMAGE', imageHash: image.hash, scaleMode: 'FILL' }]
+  } catch {
+    figma.notify(`Couldn't load photo for ${who || 'a speaker'}`, { error: true })
   }
-
-  speaker_layout.itemSpacing = 25;
-  speaker_layout.counterAxisSpacing = 25;
-
-  speaker_layout.resize(frame.width * 0.9 , frame.height * 0.9);
-
-  speaker_layout.layoutSizingVertical = 'HUG';
-
-  if(settings.LAYOUT == "VERTICAL"){
-    speaker_layout.layoutSizingHorizontal = "HUG";
-  }
-
-  speaker_layout.fills = [];
-
-  return speaker_layout;
 }
 
-async function generateSpeaker(frame, speaker){
+async function createTemplate() {
+  const regular: FontName = { family: 'Inter', style: 'Regular' }
+  const bold: FontName = { family: 'Inter', style: 'Bold' }
+  await Promise.all([figma.loadFontAsync(regular), figma.loadFontAsync(bold)])
 
-  // console.log(speaker);
-
-  const speaker_image = await generateSpeakerImage(frame, speaker);
-
-  const speaker_name = generateText(speaker.name, 'Poppins', 'Bold', settings.NAME_FONT_SIZE);
-  const speaker_designation = generateText(speaker.designation, 'Poppins', 'Regular', settings.CONTENT_FONT_SIZE);
-  const speaker_organisation = generateText(speaker.organisation, 'Poppins', 'Regular', settings.CONTENT_FONT_SIZE);
-
-  const designation_item = generateDesignationGroup([speaker_name, speaker_designation, speaker_organisation]);
-  const speaker_item = generateSpeakerGroup([speaker_image, designation_item]);
-
-  return speaker_item;
-
-}
-
-function generateSpeakerGroup(items){
-
-  const speaker_group = figma.createFrame();
-
-  speaker_group.resize(settings.SPEAKER_CONTENT_SIZE, settings.SPEAKER_CONTENT_SIZE);
-
-  items.forEach(item => {
-    speaker_group.appendChild(item);    
-  });
-
-  speaker_group.layoutMode = settings.LAYOUT == 'HORIZONTAL' ? 'VERTICAL' : 'HORIZONTAL';
-  speaker_group.primaryAxisAlignItems = 'MIN';
-  speaker_group.counterAxisAlignItems = 'CENTER';
-  speaker_group.fills = [];
-  speaker_group.itemSpacing = settings.LAYOUT == 'HORIZONTAL' ? 0 : 25;
-  speaker_group.layoutSizingVertical = 'HUG';
-
-  return speaker_group;
-
-}
-
-function generateDesignationGroup(items){
-  const speaker_group = figma.createFrame();
-
-  speaker_group.resize(settings.SPEAKER_CONTENT_SIZE, settings.SPEAKER_CONTENT_SIZE);
-
-  items.forEach(item => {
-    speaker_group.appendChild(item);    
-  });
-
-  speaker_group.layoutMode = 'VERTICAL';
-
-  if(settings.LAYOUT == "HORIZONTAL"){
-    speaker_group.primaryAxisAlignItems = 'MIN';
-    speaker_group.counterAxisAlignItems = 'CENTER';
-  }
-  else{
-    speaker_group.primaryAxisAlignItems = 'CENTER';
-    speaker_group.counterAxisAlignItems = 'MIN';
+  const text = (chars: string, size: number, width: number, font = regular) => {
+    const t = figma.createText()
+    t.fontName = font
+    t.characters = chars
+    t.fontSize = size
+    t.textAlignHorizontal = 'CENTER'
+    t.resize(width, t.height)
+    t.textAutoResize = 'HEIGHT'
+    return t
   }
 
-  speaker_group.layoutSizingVertical = 'HUG';
-  speaker_group.layoutSizingHorizontal = 'HUG';
-  
-  speaker_group.fills = [];
-
-  speaker_group.maxWidth = settings.SPEAKER_CONTENT_SIZE;
-
-  return speaker_group;
-}
-
-function generateText(text, fontname, weight, size){
-
-  const textNode = figma.createText();
-  textNode.characters = text ?? " ";
-  textNode.fontName = { family: fontname, style: weight};
-  textNode.fontSize = size;
-  textNode.textAlignHorizontal = settings.LAYOUT == "HORIZONTAL" ? 'CENTER' : 'LEFT';
-  textNode.textAlignVertical = 'CENTER';
-  textNode.textAutoResize = 'WIDTH_AND_HEIGHT';
-  textNode.resize(settings.SPEAKER_CONTENT_SIZE, textNode.height);
-
-  if(settings.LAYOUT == "VERTICAL"){
-    textNode.textAutoResize = 'HEIGHT';
+  const stack = (name: string, mode: 'HORIZONTAL' | 'VERTICAL', gap: number, children: SceneNode[]) => {
+    const f = figma.createFrame()
+    f.name = name
+    f.fills = []
+    f.layoutMode = mode
+    f.itemSpacing = gap
+    f.primaryAxisAlignItems = 'CENTER'
+    f.counterAxisAlignItems = 'CENTER'
+    f.primaryAxisSizingMode = 'AUTO'
+    f.counterAxisSizingMode = 'AUTO'
+    children.forEach((c) => f.appendChild(c))
+    return f
   }
 
-  return textNode;
+  const photo = figma.createRectangle()
+  photo.name = '#photo'
+  photo.resize(240, 240)
+  photo.cornerRadius = 120
+  photo.fills = [{ type: 'IMAGE', imageHash: figma.createImage(figma.base64Decode(PLACEHOLDER_PNG)).hash, scaleMode: 'FILL' }]
 
-}
+  const speaker = stack('@speaker', 'VERTICAL', 12, [
+    photo,
+    text('#name', 28, 280, bold),
+    text('#designation', 20, 280),
+    text('#organisation', 20, 280),
+  ])
 
-async function generateSpeakerImage(frame, speaker){
+  const layout = stack('@layout', 'HORIZONTAL', 48, [speaker])
+  layout.layoutWrap = 'WRAP'
+  layout.counterAxisSpacing = 48
+  layout.resize(1600, layout.height)
+  layout.primaryAxisSizingMode = 'FIXED'
+  layout.counterAxisSizingMode = 'AUTO'
 
-  const image = await figma.createImageAsync(speaker.photo);
+  const root = stack('AutoDrop Template', 'VERTICAL', 64, [text('#category', 36, 1600), text('#name', 80, 1600, bold), layout])
+  root.fills = [figma.util.solidPaint('#FFFFFF')]
+  root.paddingTop = root.paddingBottom = root.paddingLeft = root.paddingRight = 80
+  root.resize(1920, 1080)
+  root.primaryAxisSizingMode = 'FIXED'
+  root.counterAxisSizingMode = 'FIXED'
+  root.x = Math.round(figma.viewport.center.x - root.width / 2)
+  root.y = Math.round(figma.viewport.center.y - root.height / 2)
 
-  const speaker_image = figma.createRectangle();
-
-  speakerImageDecoration(speaker_image);
-
-  speaker_image.resize(settings.SPEAKER_IMAGE_SIZE, settings.SPEAKER_IMAGE_SIZE);
-
-  speaker_image.fills = [
-    figma.util.solidPaint('#FFFFFF'),
-    {
-      type : 'IMAGE',
-      imageHash: image.hash,
-      scaleMode: 'FILL'
-    }
-  ];
-
-  return speaker_image;
-
-}
-
-function speakerImageDecoration(speaker_image){
-
-  if(settings.SPEAKER_IMAGE_TYPE == "C"){
-    speaker_image.cornerRadius = settings.SPEAKER_IMAGE_SIZE/2;
-  }
-  else if(settings.SPEAKER_IMAGE_TYPE == "CBR"){
-    speaker_image.cornerRadius = settings.SPEAKER_IMAGE_SIZE/2;
-    speaker_image.bottomRightRadius = 0;
-  }
-  else if(settings.SPEAKER_IMAGE_TYPE == "CBL"){
-    speaker_image.cornerRadius = settings.SPEAKER_IMAGE_SIZE/2;
-    speaker_image.bottomLeftRadius = 0;
-  }
-  else if(settings.SPEAKER_IMAGE_TYPE == "BR"){
-    speaker_image.cornerRadius = settings.SPEAKER_IMAGE_SIZE * 0.2;
-    speaker_image.bottomRightRadius = 0;
-  }
-  else if(settings.SPEAKER_IMAGE_TYPE == "BL"){
-    speaker_image.cornerRadius = settings.SPEAKER_IMAGE_SIZE * 0.2;
-    speaker_image.bottomLeftRadius = 0;
-  }
-
-  speaker_image.strokes = [
-    figma.util.solidPaint(settings.SPEAKER_STROKE_COLOR)
-  ]
-
-  speaker_image.strokeWeight = settings.SPEAKER_STROKE_WIDTH;
-
-}
-
-async function generateHeading(frame, agenda){
-
-  let canvas_width = frame.width;
-  let canvas_height = frame.height;
-
-  await figma.loadFontAsync({ family: 'Inter', style: 'Regular' });
-  await figma.loadFontAsync({ family: 'Poppins', style: 'Bold' });
-  await figma.loadFontAsync({ family: 'Poppins', style: 'Regular' });
-  
-  const heading = figma.createText();
-  heading.characters = agenda.name;
-  heading.fontSize = settings.HEADING_SIZE;
-  heading.textAlignHorizontal = 'CENTER';
-  
-  let heading_width = heading.width;
-  let heading_height = heading.height;
-
-  heading.fontName = { family: "Poppins", style: 'Bold'};
-
-  if(heading_width > canvas_width){
-    heading.fontSize = settings.HEADING_SIZE * 0.75;
-    heading.resize( canvas_width * 0.8, heading.height );
-    heading_width = heading.width;
-    heading_height = heading.height;
-
-    // console.log(heading_height);
-
-    if(heading_height > 250){
-      heading.fontSize = settings.HEADING_SIZE * 0.5;
-      heading.resize( canvas_width * 0.8, heading.height );
-
-      heading_width = heading.width;
-      heading_height = heading.height;
-    }
-  }
-
-  return heading;
-
+  figma.currentPage.selection = [root]
+  figma.viewport.scrollAndZoomIntoView([root])
+  figma.notify('Template created and selected. Style it, then Generate.')
 }

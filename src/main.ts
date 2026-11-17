@@ -1,9 +1,7 @@
-import "svelte"
+import { mount } from "svelte"
 import App from "./App.svelte"
 
-import "./base.css";
-
-const app = new App({
+const app = mount(App, {
   target: document.body,
 })
 
